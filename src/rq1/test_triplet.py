@@ -12,7 +12,7 @@ import torch
 from transformers import BertConfig
 from util.util import get_files_paths_from_directory
 from model.model import TBertT,TBertSI, TBertTNoCode
-from util.data_util import get_tag_encoder, get_fixed_tag_encoder, load_data_to_dataset, get_dataloader, load_tenor_data_to_dataset, load_data_to_dataset_for_test
+from util.data_util import get_tag_encoder, get_fixed_tag_encoder, load_data_to_dataset, get_dataloader, load_tenor_data_to_dataset
 from torch.utils.data import DataLoader
 import numpy as np
 logging.basicConfig(
@@ -55,16 +55,7 @@ def evaluate_ori(pred, label, topk,mlb=None):
         f1_k = 0.0
     else:
         f1_k = 2 * pre_k * rec_k / (pre_k + rec_k)
-    new_dict = dict()
-    new_dict['top'] = topk
-    new_dict['precision'] = pre_k
-    new_dict['recall'] = rec_k
-    new_dict['f1'] = f1_k
-    new_dict['predict_tag'] = mlb.inverse_transform(np.array([top_idx_one_hot]))
-    new_dict['true_tag'] = mlb.inverse_transform(np.array([label]))
-    to_csv.append(new_dict)
-    logger.info("Loging dict ---> {0}".format(new_dict))
-    return {'precision': pre_k, 'recall': rec_k, 'f1': f1_k}
+    return pre_k, rec_k, f1_k
 
 
 def evaluate_batch(pred, label, topk_list=[1, 2, 3, 4, 5], mlb=None):
@@ -132,10 +123,8 @@ def test(args, model, test_set,mlb):
             fin_targets.extend(targets.cpu().detach().numpy().tolist())
             fin_outputs.extend(torch.sigmoid(
                 outputs).cpu().detach().numpy().tolist())
-            logger.info(data['title'])
-            logger.info(type(data['title']))
             [pre, rc, f1, cnt] = evaluate_batch(
-                fin_outputs, fin_targets, [1, 2, 3, 4, 5], mlb)
+                fin_outputs, fin_targets, [1, 2, 3, 4, 5],mlb)
             fin_pre.append(pre)
             fin_rc.append(rc)
             fin_f1.append(f1)
@@ -159,8 +148,7 @@ def get_eval_args():
         "--data_dir", default="../../data/test", type=str,
         help="The input test data dir.")
     
-    parser.add_argument("--model_path", default="../../data/results/triplet_12-30 06-12-15_/epoch-0-file-509/t_bert.pt", help="The model to evaluate")
-    # parser.add_argument("--model_path", default="../../data/results/triplet_12-07 15-29-36_/final_model-199/t_bert.pt", help="The model to evaluate")
+    parser.add_argument("--model_path", default="../../data/results/triplet_12-30/t_bert.pt", help="The model to evaluate")
     parser.add_argument("--no_cuda", action="store_true", help="Whether not to use CUDA when available")
     parser.add_argument("--vocab_file", default="../../data/tags/commonTags_post2vec.csv", type=str,
                         help="The tag vocab data file.")
@@ -205,17 +193,7 @@ def main():
     model = torch.nn.DataParallel(model)
     model.to(device)
     
-    if args.code_bert == "microsoft/codebert-base":
-        args.model_path = "./epoch1_t_bert.pt"
-    elif  args.code_bert == "roberta-base":
-        args.model_path = "../../data/results/triplet_01-02-02-57-44_/epoch-0-file-499/t_bert.pt"
-    elif  args.code_bert == "jeniya/BERTOverflow":
-        args.model_path = "../../data/results/triplet_01-02-02-54-11_/epoch-0-file-499/t_bert.pt"
-    elif  args.code_bert == "albert-base-v2":
-        args.model_path = "../../data/results/albert-base-v2_01-02-06-19-49_/epoch-0-file-499/t_bert.pt"
-    elif  args.code_bert == "bert-base-uncased":
-        args.model_path = "../../data/results/bert-base-uncased_01-05-15-56-05_/epoch-0-file-499/t_bert.pt"
-        
+
     if args.model_path and os.path.exists(args.model_path):
         model_path = os.path.join(args.model_path, )
         model.load_state_dict(torch.load(model_path)) 
@@ -232,7 +210,7 @@ def main():
     
     for file_cnt in range(len(files)):
         logger.info("load file {}".format(file_cnt))
-        test_set = load_data_to_dataset_for_test(args.mlb, files[file_cnt], args.code_bert)
+        test_set = load_tenor_data_to_dataset(args.mlb, files[file_cnt])
         [pre, rc, f1, cnt] = test(args, model, test_set, mlb)
         fin_pre.append(pre)
         fin_rc.append(rc)
@@ -247,12 +225,5 @@ def main():
     logger.info("Final Precision Score  = {}".format(avg_pre))
     logger.info("Final Count  = {}".format(fin_cnt))
     logger.info("Test finished")
-    keys = to_csv[0].keys()
-
-    rgs.codebert
-    with open('./logs/' + args.codebert + '-result.csv', 'w', newline='') as output_file:
-        dict_writer = csv.DictWriter(output_file, keys)
-        dict_writer.writeheader()
-        dict_writer.writerows(to_csv)
 if __name__ == "__main__":
     main()

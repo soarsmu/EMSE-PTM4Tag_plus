@@ -11,7 +11,7 @@ sys.path.append("../..")
 import torch
 from transformers import BertConfig
 from util.util import get_files_paths_from_directory
-from model.model import TBertT,TBertSI, TBertTNoCode
+from model.model import TBertT,TBertSI, TBertTNoTitle
 from util.data_util import get_tag_encoder, get_fixed_tag_encoder, load_data_to_dataset, get_dataloader, load_tenor_data_to_dataset
 from torch.utils.data import DataLoader
 import numpy as np
@@ -55,16 +55,6 @@ def evaluate_ori(pred, label, topk,mlb=None):
         f1_k = 0.0
     else:
         f1_k = 2 * pre_k * rec_k / (pre_k + rec_k)
-    # return {'precision': pre_k, 'recall': rec_k, 'f1': f1_k}
-    # new_dict = dict()
-    # new_dict['top'] = topk
-    # new_dict['precision'] = pre_k
-    # new_dict['recall'] = rec_k
-    # new_dict['f1'] = f1_k
-    # new_dict['predict_tag'] = mlb.inverse_transform(np.array([top_idx_one_hot]))
-    # new_dict['true_tag'] = mlb.inverse_transform(np.array([label]))
-    # to_csv.append(new_dict)
-    # logger.info("Loging dict ---> {0}".format(new_dict))
     return pre_k, rec_k, f1_k
 
 
@@ -108,10 +98,6 @@ def test(args, model, test_set,mlb):
         for batch_idx, data in enumerate(test_data_loader, 0):
             fin_outputs = []
             fin_targets = []
-            title_ids = data['titile_ids'].to(
-                args.device, dtype=torch.long)
-            title_mask = data['title_mask'].to(
-                args.device, dtype=torch.long)
             text_ids = data['text_ids'].to(
                 args.device, dtype=torch.long)
             text_mask = data['text_mask'].to(
@@ -123,9 +109,7 @@ def test(args, model, test_set,mlb):
             targets = data['labels'].to(
                 args.device, dtype=torch.float)
 
-            outputs = model(title_ids=title_ids,
-                            title_attention_mask=title_mask,
-                            text_ids=text_ids,
+            outputs = model(text_ids=text_ids,
                             text_attention_mask=text_mask,
                             code_ids=code_ids,
                             code_attention_mask=code_mask)
@@ -158,9 +142,10 @@ def get_eval_args():
         "--data_dir", default="../../data/test", type=str,
         help="The input test data dir.")
     
-    parser.add_argument("--model_path", default="../../data/results/triplet_12-30 06-12-15_/epoch-0-file-509/t_bert.pt", help="The model to evaluate")
-    # parser.add_argument("--model_path", default="../../data/results/triplet_12-07 15-29-36_/final_model-199/t_bert.pt", help="The model to evaluate")
+    parser.add_argument("--model_path", default="../../data/results/microsoft/codebert-base/t_bert.pt", help="The model to evaluate")
+
     parser.add_argument("--no_cuda", action="store_true", help="Whether not to use CUDA when available")
+    parser.add_argument("--no_code", action="store_true", help="Whether to include code in the model")
     parser.add_argument("--vocab_file", default="../../data/tags/commonTags_post2vec.csv", type=str,
                         help="The tag vocab data file.")
     parser.add_argument("--verbus", action="store_true", help="show more logs")
@@ -171,6 +156,7 @@ def get_eval_args():
                         choices=['microsoft/codebert-base', 'huggingface/CodeBERTa-small-v1',
                                  'codistai/codeBERT-small-v2', 'albert-base-v2','jeniya/BERTOverflow', 'roberta-base',
                                  'bert-base-uncased'])
+    parser.add_argument("--log_result", action="store_true", help="wheather to store the test result in a csv file")
     parser.add_argument("--model_type", default="triplet", choices=["triplet","siamese"])
     args = parser.parse_args()
     return args
@@ -198,23 +184,12 @@ def main():
     args.num_class = num_class
     
     if args.model_type == "triplet":
-        model = TBertT(BertConfig(), args.code_bert, num_class)
+        model = TBertTNoTitle(BertConfig(), args.code_bert, num_class)
     elif args.model_type == "siamese":
         model = TBertSI(BertConfig(), args.code_bert, num_class)
     model = torch.nn.DataParallel(model)
     model.to(device)
-    
-    if args.code_bert == "microsoft/codebert-base":
-        args.model_path = "./epoch1_t_bert.pt"
-    elif  args.code_bert == "roberta-base":
-        args.model_path = "../../data/results/triplet_01-02-02-57-44_/epoch-0-file-499/t_bert.pt"
-    elif  args.code_bert == "jeniya/BERTOverflow":
-        args.model_path = "../../data/results/triplet_01-02-02-54-11_/epoch-0-file-499/t_bert.pt"
-    elif  args.code_bert == "albert-base-v2":
-        args.model_path = "../../data/results/albert-base-v2_01-02-06-19-49_/epoch-0-file-499/t_bert.pt"
-    elif  args.code_bert == "bert-base-uncased":
-        args.model_path = "../../data/results/bert-base-uncased_01-05-15-56-05_/epoch-0-file-499/t_bert.pt"
-        
+
     if args.model_path and os.path.exists(args.model_path):
         model_path = os.path.join(args.model_path, )
         model.load_state_dict(torch.load(model_path)) 
@@ -246,11 +221,5 @@ def main():
     logger.info("Final Precision Score  = {}".format(avg_pre))
     logger.info("Final Count  = {}".format(fin_cnt))
     logger.info("Test finished")
-    # keys = to_csv[0].keys()
-
-    # with open('./logs/result.csv', 'w', newline='') as output_file:
-    #     dict_writer = csv.DictWriter(output_file, keys)
-    #     dict_writer.writeheader()
-    #     dict_writer.writerows(to_csv)
 if __name__ == "__main__":
     main()

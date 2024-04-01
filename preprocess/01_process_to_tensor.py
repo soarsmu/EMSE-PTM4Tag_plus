@@ -1,5 +1,5 @@
 import sys
-sys.path.append("../bert")
+sys.path.append("../src")
 sys.path.append("../..")
 import multiprocessing as mp
 from typing import Counter
