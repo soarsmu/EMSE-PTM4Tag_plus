@@ -68,10 +68,6 @@ docker run --name=ptm4tag_plus --gpus all -it --mount type=bind,src=/media/codeb
     │   ├── train_no_code.py
     │   ├── train_no_text.py
     │   └── train_no_title.py
-    ├── triplet_extension
-    │   ├── test_triplet.py
-    │   ├── train.py
-    │   └── train_triplet.py
     └── util
         ├── __init__.py
         ├── data_util.py
